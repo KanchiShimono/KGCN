@@ -73,7 +73,10 @@ def read_rating_file(
             unwatched_set -= user_neg_rating[user]
 
         for item_id in np.random.choice(
-                list(unwatched_set), size=len(pos_item_id_set), replace=False):
+                list(unwatched_set),
+                size=len(pos_item_id_set),
+                replace=False
+                if len(list(unwatched_set)) >= len(pos_item_id_set) else True):
             rating_data.append((user_id, item_id, 0))
 
     return user_vocab, rating_data
