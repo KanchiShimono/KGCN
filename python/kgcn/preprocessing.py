@@ -1,11 +1,8 @@
-import os
-import pickle
 from collections import defaultdict
 from typing import Dict, Iterable, List, Set, Tuple
 
 import numpy as np
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
 
 from kgcn.types import IDVocab, RatingTriplet
 
@@ -35,10 +32,11 @@ def create_int_feature(value: int) -> tf.train.Feature:
 
 def convert_instance_to_example(
         instance: TrainingInstance) -> tf.train.Example:
+    """convert a single TrainigInstance to Tensorflow Example"""
     features = {
         'input_user': create_int_feature(instance.input_user),
         'input_item': create_int_feature(instance.input_item),
-        'label': create_int_feature(instance.label),
+        'label': create_int_feature(instance.label)
     }
     return tf.train.Example(features=tf.train.Features(feature=features))
 
@@ -72,8 +70,28 @@ def write_instance_to_example_files(
 def read_item_index_to_entity_id_file(
         path: str,
         sep: str = '\t') -> Tuple[IDVocab, IDVocab]:
-    # xxx_vocab is id mapping between original ids on domain and sequencial id
-    # for using on kgcn.
+    """Read
+
+    xxx_vocab is id mapping between original ids on domain and sequencial id
+    for used on KGCN.
+
+    Args:
+        path (str): Path to id correspondence table file original item index
+            and knowlege graph original entity id
+        sep (str, optional): Separator charactor. Defaults to '\t'.
+
+    Returns:
+        Tuple[IDVocab, IDVocab]: Return item vocabulary and entity vocabulary.
+            item vocabulary
+                key: original item index on domain.
+                value: sequencial id used in KGCN.
+                       Same as value of entity vocabulary.
+            entity vocabulary
+                key: original entity index on knowlege graph.
+                value: sequencial id used in KGCN.
+                       Same as value of item vocabulary.
+    """
+
     # key: original id, value: sequencial id
     item_vocab: IDVocab = dict()
     entity_vocab: IDVocab = dict()
@@ -95,6 +113,22 @@ def read_rating_file(
         sep: str = ',',
         skip_header: bool = True,
         threshold: float = 4.0) -> Tuple[IDVocab, List[RatingTriplet]]:
+    """Read file interactions between user and item
+
+    Args:
+        path (str): Path to user item interactions file. Generally csv format.
+        item_vocab (IDVocab): Dictionary of convert from original item index
+            to sequencial entity id used in KGCN.
+        sep (str, optional): Separator charactor. Defaults to ','.
+        skip_header (bool, optional): Skip csv header. Defaults to True.
+        threshold (float, optional): Threshold for regarding positive reaction.
+            Defaults to 4.0.
+
+    Returns:
+        Tuple[IDVocab, List[RatingTriplet]]:
+            Return user vocabulary and transformed interaction data.
+    """
+
     assert len(item_vocab) > 0
 
     user_pos_rating: Dict[str, Set[int]] = defaultdict(set)
@@ -147,6 +181,21 @@ def read_kg_file(
         entity_vocab: IDVocab,
         neighbor_sample_size: int,
         sep: str = '\t') -> Tuple[IDVocab, np.ndarray, np.ndarray]:
+    """Read knowlege graph file
+
+    Args:
+        path (str): Path to knowlege graph.
+        entity_vocab (IDVocab): Dictionary of convert from original entity id
+            in knowlege graph to sequencial entity id used in KGCN.
+        neighbor_sample_size (int): Adjusting number of sample neighbors
+            for convolution.
+        sep (str, optional): Separator charactor. Defaults to '\t'.
+
+    Returns:
+        Tuple[IDVocab, np.ndarray, np.ndarray]: Return relation vocabulary,
+            adjusted entity array and adjusted relation array.
+    """
+
     relation_vocab: IDVocab = dict()
     # kg is {'sequencial head entity id',
     #   [(sequencial tail entitiy id, sequencial relation id), ...]}
@@ -196,51 +245,3 @@ def read_kg_file(
             [all_neighbors[i][1] for i in sample_indices])
 
     return relation_vocab, adj_entity, adj_relation
-
-
-def process_data(
-        item_id_to_entity_path: str,
-        kg_path: str,
-        rating_path: str,
-        neighbor_sample_size: int,
-        output_dir: str,
-        user_tfrecord: bool = False) -> None:
-    item_vocab, entity_vocab = read_item_index_to_entity_id_file(
-        item_id_to_entity_path)
-
-    user_vocab, rating_data = read_rating_file(rating_path, item_vocab)
-
-    relation_vocab, adj_entity, adj_relation = read_kg_file(
-        kg_path, entity_vocab, neighbor_sample_size)
-
-    # TODO: propotion of train, dev and test
-    # should to be passed as function argument
-    # train : dev : test = 6 : 2 : 2
-    train_data, valid_data = train_test_split(rating_data, test_size=0.4)
-    valid_data, test_data = train_test_split(valid_data, test_size=0.5)
-
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
-
-    for data, path in zip(
-            (item_vocab, entity_vocab, user_vocab, relation_vocab),
-            ('item_vocab', 'entity_vocab', 'user_vocab', 'relation_vocab')):
-        with open(os.path.join(output_dir, f'{path}.pickle'), 'wb') as f:
-            pickle.dump(data, f)
-
-    for data, path in zip(
-            (adj_entity, adj_relation), ('adj_entity', 'adj_relation')):
-        np.save(os.path.join(output_dir, f'{path}.npy'), data)
-
-    if user_tfrecord:
-        for data, path in zip(
-                (train_data, valid_data, test_data),
-                ('train', 'valid', 'test')):
-            instances = create_instances_from_iterable(data)
-            write_instance_to_example_files(
-                instances, os.path.join(output_dir, f'{path}.tfrecords'))
-    else:
-        for data, path in zip(
-                (train_data, valid_data, test_data),
-                ('train_data', 'valid_data', 'test_data')):
-            np.save(os.path.join(output_dir, f'{path}.npy'), data)
