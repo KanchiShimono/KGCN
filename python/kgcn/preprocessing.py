@@ -1,12 +1,72 @@
 import os
 import pickle
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Iterable, List, Set, Tuple
 
 import numpy as np
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 from kgcn.types import IDVocab, RatingTriplet
+
+
+class TrainingInstance:
+    """A single training instance"""
+
+    def __init__(self, input_user: int, input_item: int, label: int) -> None:
+        self.input_user = input_user
+        self.input_item = input_item
+        self.label = label
+
+    def __str__(self) -> str:
+        return (
+            f'input_user: {self.input_user}, '
+            f'input_item: {self.input_item}, '
+            f'label: {self.label}'
+        )
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+def create_int_feature(value: int) -> tf.train.Feature:
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def convert_instance_to_example(
+        instance: TrainingInstance) -> tf.train.Example:
+    features = {
+        'input_user': create_int_feature(instance.input_user),
+        'input_item': create_int_feature(instance.input_item),
+        'label': create_int_feature(instance.label),
+    }
+    return tf.train.Example(features=tf.train.Features(feature=features))
+
+
+def create_instances_from_iterable(
+        itr: Iterable[RatingTriplet]) -> List[TrainingInstance]:
+    """Create A TrainingInstance from Iterable of RatingTriplet"""
+
+    instances: List[TrainingInstance] = []
+    for i in itr:
+        assert len(i) == 3
+        instances.append(TrainingInstance(
+            input_user=i[0],
+            input_item=i[1],
+            label=i[2]))
+    return instances
+
+
+def write_instance_to_example_files(
+        instances: List[TrainingInstance],
+        output_file: str) -> None:
+    """Create TF example files from `TrainingInstance`s."""
+
+    writer = tf.io.TFRecordWriter(output_file)
+    for instance in instances:
+        tf_example = convert_instance_to_example(instance)
+        writer.write(tf_example.SerializeToString())
+    writer.close()
 
 
 def read_item_index_to_entity_id_file(
@@ -143,7 +203,8 @@ def process_data(
         kg_path: str,
         rating_path: str,
         neighbor_sample_size: int,
-        output_dir: str) -> None:
+        output_dir: str,
+        user_tfrecord: bool = False) -> None:
     item_vocab, entity_vocab = read_item_index_to_entity_id_file(
         item_id_to_entity_path)
 
@@ -168,7 +229,18 @@ def process_data(
             pickle.dump(data, f)
 
     for data, path in zip(
-            (adj_entity, adj_relation, train_data, valid_data, test_data),
-            ('adj_entity', 'adj_relation',
-             'train_data', 'valid_data', 'test_data')):
+            (adj_entity, adj_relation), ('adj_entity', 'adj_relation')):
         np.save(os.path.join(output_dir, f'{path}.npy'), data)
+
+    if user_tfrecord:
+        for data, path in zip(
+                (train_data, valid_data, test_data),
+                ('train', 'valid', 'test')):
+            instances = create_instances_from_iterable(data)
+            write_instance_to_example_files(
+                instances, os.path.join(output_dir, f'{path}.tfrecords'))
+    else:
+        for data, path in zip(
+                (train_data, valid_data, test_data),
+                ('train_data', 'valid_data', 'test_data')):
+            np.save(os.path.join(output_dir, f'{path}.npy'), data)
