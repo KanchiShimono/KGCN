@@ -1,12 +1,13 @@
-from typing import List, Tuple
-
 import tensorflow as tf
 from numpy import ndarray
 from tensorflow.keras.layers import Activation, Embedding, Input, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 
-from kgcn.layers import ConcatAggregator, NeighborAggregator, SumAggregator
+from kgcn.layers import (
+    ConcatAggregator, NeighborAggregator, NeighborsCombination,
+    ReceptiveField, SumAggregator
+)
 
 
 class KGCN(Model):
@@ -68,18 +69,17 @@ class KGCN(Model):
 
         # [(batch_size, 1), (batch_size, n_neighbor),
         # (batch_size, n_neighbor**2), (batch_size, n_neighbor**3), ...]
-        entities, relations = Lambda(
-            lambda x: self.get_neighbors(x),
-            name='receptive_field')(input_item)
+        entities, relations = ReceptiveField(
+            num=self.n_iter,
+            adj_entity=self.adj_entity,
+            adj_relation=self.adj_relation)(input_item)
 
         # [(batch_size, 1, dim), (batch_size, n_neighbor, dim),
         # (batch_size, n_neighbor**2, dim), ...]
         neigh_ent_embed_list = [entity_embedding(e) for e in entities]
         neigh_rel_embed_list = [relation_embedding(r) for r in relations]
 
-        neighbor_embedding = Lambda(
-            lambda x: self.get_neighbor_info(x[0], x[1], x[2]),
-            name='neighbor_embedding')
+        neighbor_embedding = NeighborsCombination(self.n_neighbor)
 
         for i in range(self.n_iter):
             # use tanh as activate function only last layer
@@ -114,86 +114,3 @@ class KGCN(Model):
 
         super(KGCN, self).__init__(
             inputs=[input_user, input_item], outputs=[output], **kwargs)
-
-    # TODO: get_neighbors may be better to implement as keras layer
-    def get_neighbors(
-            self,
-            entity: tf.Tensor) -> Tuple[List[tf.Tensor], List[tf.Tensor]]:
-        """Get entity and relation id of fixed size receptive field
-
-        Args:
-            entity: Tensor of item indices that you want to get
-                receiptive field.
-                Tensor shape (batch_size, 1, 1)
-
-        Returns:
-            A list of tensor shape [(batch_size, 1), (batch_size, n_neighbor),
-            (batch_size, n_neighbor**2), (batch_size, n_neighbor**3), ...]
-            Values of tensor is the receptive field entity/relation id for
-            given entity as function arg.
-        """
-
-        entities = [entity]
-        relations = []
-
-        for i in range(self.n_iter):
-            neighbor_eintities = tf.gather(self.adj_entity, entities[-1])
-            neighbor_relations = tf.gather(self.adj_relation, entities[-1])
-            entities.append(
-                tf.reshape(
-                    neighbor_eintities, shape=(-1, self.n_neighbor ** (i+1))))
-            relations.append(
-                tf.reshape(
-                    neighbor_relations, shape=(-1, self.n_neighbor ** (i+1))))
-
-        return entities, relations
-
-    # TODO: get_neighbor_info may be better to implement as keras layer
-    def get_neighbor_info(
-            self,
-            user_emb: tf.Tensor,
-            rel_emb: tf.Tensor,
-            ent_emb: tf.Tensor) -> tf.Tensor:
-        """Get user personalized neighbor representation
-
-        Obrain user personalized neighbor representation by computing the
-        linear compination of forcused item entity v.
-        The personalized mechanism is Attention.
-        Query, Key and Value of attention mechanism correspond to
-            query: user embedding
-            key: relation embedding
-            value: entities embedding of neighbor entities of forcused entity
-
-        Args:
-            user_emb: User embedding tensor shape (bath_size, 1, dim)
-            rel_emb: Neighbor relation tensor
-                shape (batch_size, n_neighbor ** hop, dim)
-            ent_emb: Neighbor entity embedding tensor
-                shape (batch_size, n_neighbor ** hop, dim)
-
-        Returns:
-            A tensor shape (bathch_size, n_neighbor ** (hop - 1), dim).
-            Tensor is the neighborhood representation of item entity v.
-            v is personalized for each user.
-        """
-
-        # batch_size is None when KGCN model is building.
-        # So bath_size can not get by user_emb.shape[0].
-        batch_size = tf.shape(user_emb)[0]
-        # dim is be determined when KGCN model is building so can get by
-        # user_emb.shape[-1]. If use tf.shape, fllowing tf.reshape will
-        # be error.
-        dim = user_emb.shape[-1]
-        user_rel_score = tf.reduce_sum(
-            tf.multiply(user_emb, rel_emb), axis=-1, keepdims=True)
-        user_rel_score = tf.reshape(
-            user_rel_score, shape=(batch_size, -1, self.n_neighbor))
-        normalize_user_rel_score = tf.nn.softmax(user_rel_score, axis=-1)
-        normalize_user_rel_score = tf.expand_dims(
-            normalize_user_rel_score, axis=-1)
-
-        ent_emb = tf.reshape(
-            ent_emb, shape=(batch_size, -1, self.n_neighbor, dim))
-        neighbors_aggregated = tf.reduce_sum(
-            tf.multiply(normalize_user_rel_score, ent_emb), axis=2)
-        return neighbors_aggregated
