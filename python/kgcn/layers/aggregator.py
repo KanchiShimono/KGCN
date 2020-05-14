@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List
 
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
@@ -48,6 +48,18 @@ class SumAggregator(Layer):
             input_shape: List[tf.TensorShape]) -> tf.TensorShape:
         return input_shape[0]
 
+    def get_config(self) -> Dict[str, Any]:
+        config = {
+            'activation':
+                tf.keras.activations.serialize(self._activation),
+            'kernel_initializer':
+                tf.keras.initializers.serialize(self._kernel_initializer),
+            'kernel_regularizer':
+                tf.keras.regularizers.serialize(self._kernel_regularizer)
+        }
+        base_config = super(SumAggregator, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class ConcatAggregator(Layer):
     def __init__(
@@ -92,6 +104,18 @@ class ConcatAggregator(Layer):
             input_shape: List[tf.TensorShape]) -> tf.TensorShape:
         return input_shape[0]
 
+    def get_config(self) -> Dict[str, Any]:
+        config = {
+            'activation':
+                tf.keras.activations.serialize(self._activation),
+            'kernel_initializer':
+                tf.keras.initializers.serialize(self._kernel_initializer),
+            'kernel_regularizer':
+                tf.keras.regularizers.serialize(self._kernel_regularizer)
+        }
+        base_config = super(ConcatAggregator, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 class NeighborAggregator(Layer):
     def __init__(
@@ -135,3 +159,15 @@ class NeighborAggregator(Layer):
             self,
             input_shape: List[tf.TensorShape]) -> tf.TensorShape:
         return input_shape[0]
+
+    def get_config(self) -> Dict[str, Any]:
+        config = {
+            'activation':
+                tf.keras.activations.serialize(self._activation),
+            'kernel_initializer':
+                tf.keras.initializers.serialize(self._kernel_initializer),
+            'kernel_regularizer':
+                tf.keras.regularizers.serialize(self._kernel_regularizer)
+        }
+        base_config = super(NeighborAggregator, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
