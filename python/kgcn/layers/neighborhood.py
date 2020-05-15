@@ -120,7 +120,7 @@ class NeighborsCombination(Layer):
         # dim is be determined when KGCN model is building so can get by
         # user_emb.shape[-1]. If use tf.shape, fllowing tf.reshape will
         # be error.
-        dim = tf.shape(user_emb)[-1]
+        dim = user_emb.shape[-1]
         user_rel_score = tf.reduce_sum(
             tf.multiply(user_emb, rel_emb), axis=-1, keepdims=True)
         user_rel_score = tf.reshape(
