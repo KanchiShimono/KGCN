@@ -1,4 +1,4 @@
-all = ['__version__', 'KGCN']
+__all__ = ['__version__', 'KGCN']
 
 from kgcn.__version__ import __version__
 from kgcn.models import KGCN
