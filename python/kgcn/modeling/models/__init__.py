@@ -1,3 +1,3 @@
 __all__ = ['KGCN']
 
-from kgcn.models.kgcn import KGCN
+from kgcn.modeling.models.kgcn import KGCN

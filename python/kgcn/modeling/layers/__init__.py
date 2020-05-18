@@ -6,7 +6,9 @@ __all__ = [
     'NeighborsCombination'
 ]
 
-from kgcn.layers.aggregator import (
+from kgcn.modeling.layers.aggregator import (
     ConcatAggregator, NeighborAggregator, SumAggregator
 )
-from kgcn.layers.neighborhood import NeighborsCombination, ReceptiveField
+from kgcn.modeling.layers.neighborhood import (
+    NeighborsCombination, ReceptiveField
+)
