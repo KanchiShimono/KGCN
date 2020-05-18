@@ -6,7 +6,7 @@ from tensorflow.keras.layers import Activation, Embedding, Input, Lambda
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 
-from kgcn.layers import (
+from kgcn.modeling.layers import (
     ConcatAggregator, NeighborAggregator,
     NeighborsCombination, ReceptiveField, SumAggregator
 )
