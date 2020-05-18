@@ -44,18 +44,6 @@ class KGCN(Model):
             raise ValueError(
                     'aggregator type requires on of sum, concat or neighbor')
 
-        self._config_dict = {
-            'dim': dim,
-            'n_user': n_user,
-            'n_entity': n_entity,
-            'n_relation': n_relation,
-            'adj_entity': adj_entity,
-            "adj_relation": adj_relation,
-            'n_iter': n_iter,
-            'aggregator_type': aggregator_type,
-            'regularizer_weight': regularizer_weight
-        }
-
         input_user = Input(shape=(1,), name='input_user', dtype=tf.int64)
         input_item = Input(shape=(1,), name='input_item', dtype=tf.int64)
 
@@ -128,9 +116,6 @@ class KGCN(Model):
 
         super(KGCN, self).__init__(
             inputs=[input_user, input_item], outputs=[output], **kwargs)
-
-    def get_config(self) -> Dict[str, Any]:
-        return self._config_dict
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> 'KGCN':
